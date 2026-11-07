@@ -486,7 +486,7 @@ details.set summary{cursor:pointer;color:var(--muted);font-size:.85rem;margin-to
         <label class="field" style="flex:1 1 180px"><span class="label">Food</span><input type="text" id="fQuery" placeholder="e.g. chicken biryani, Weet-Bix, pho" autocomplete="off"></label>
         <button class="btn" type="submit">Search</button>
       </form>
-      <p class="hint" id="fMsg">Searches USDA FoodData Central (dishes from many cuisines) and Open Food Facts (packaged products worldwide).</p>
+      <p class="hint" id="fMsg">Searches 1,000+ Indian dishes (Indian Nutrient Databank), USDA FoodData Central and Open Food Facts (packaged products worldwide).</p>
       <ul class="res" id="fRes"></ul>
       <div class="pick" id="fPick" hidden>
         <b id="pkName"></b>
@@ -789,8 +789,15 @@ function renderWater(){const r=peek(today()),b=r.bottles||0;
   if(!$("fQuery").value.trim()&&$("fPick").hidden)showRecent()}
 $("fLog").onclick=e=>{if(!e.target.matches(".del"))return;const id=e.target.closest("li").dataset.id;const r=day(today());r.food=r.food.filter(f=>f.id!==id);save();render()};
 
-/* food search: USDA FoodData Central + Open Food Facts */
-let found=[],picked=null;
+/* food search: Indian Nutrient Databank (built in) + USDA FoodData Central + Open Food Facts */
+let found=[],picked=null,INDB=null;
+const SYN={chole:["channa","chickpea"],chhole:["channa","chickpea"],chana:["channa","chickpea"],chawal:["rice"],sabzi:["vegetable"],sabji:["vegetable"],roti:["roti","chapati"],dhal:["dal"],daal:["dal"],paratha:["parantha","paratha"],rajma:["rajmah","rajma"],biriyani:["biryani"],aloo:["potato","aloo"],gobi:["cauliflower","gobi"],palak:["spinach","palak"],bhindi:["okra","bhindi"],baingan:["brinjal","baingan"],dahi:["curd","dahi"],chai:["tea","chai"]};
+const wordHit=(n,w)=>n.includes(w)||(SYN[w]||[]).some(s=>n.includes(s));
+const FRIED=/samosa|pakor|pakod|bhaji|puri|poori|kachori|vada|bhatura|jalebi|fried|fritter|chakli|mathri/i;
+async function loadIndb(){if(INDB)return INDB;try{const r=await fetch("indb.json");if(!r.ok)throw 0;INDB=await r.json()}catch(e){return []}return INDB}
+async function searchIndb(q){const d=await loadIndb(),ws=q.toLowerCase().split(/\s+/).filter(Boolean);
+  return d.filter(e=>{const n=e.n.toLowerCase();return ws.every(w=>wordHit(n,w))}).slice(0,15)
+    .map(e=>({name:e.n,src:"INDB",kcal100:e.k,portions:e.u&&e.g?[{label:"1 "+e.u,g:e.g}]:[],fried:FRIED.test(e.n)}))}
 function energy(f){const ns=f.foodNutrients||[];for(const id of [1008,2047,2048]){const n=ns.find(x=>x.nutrientId===id&&/kcal/i.test(x.unitName||"kcal"));if(n&&n.value)return n.value}
   const n=ns.find(x=>x.nutrientNumber==="208");return n?n.value:null}
 const tidy=s=>{s=String(s||"").trim();return s===s.toUpperCase()?s.toLowerCase().replace(/(^|[\s,(])\w/g,c=>c.toUpperCase()):s};
@@ -804,24 +811,24 @@ async function searchOff(q){const r=await fetch(`https://world.openfoodfacts.org
   return (j.products||[]).map(p=>{const n=p.nutriments||{};let k=n["energy-kcal_100g"];if(!k&&n.energy_100g)k=n.energy_100g/4.184;if(!k||!p.product_name)return null;
     const por=p.serving_quantity>0?[{label:p.serving_size||p.serving_quantity+" g",g:+p.serving_quantity}]:[];
     return{name:p.product_name+(p.brands?" · "+p.brands.split(",")[0]:""),src:"Product",kcal100:k,portions:por}}).filter(Boolean)}
-function listFoods(arr,title){found=arr;$("fRes").innerHTML=(title?`<li class="mealh" style="margin:0">${title}</li>`:"")+arr.map((f,i)=>`<li><button type="button" data-i="${i}"><span class="nm">${esc(f.name)}<small>${f.src==="USDA"?"USDA FoodData Central":f.src==="Product"?"Open Food Facts":"Your food"}</small></span><span class="kc">${Math.round(f.kcal100)} kcal/100 g</span></button></li>`).join("")}
+function listFoods(arr,title){found=arr;$("fRes").innerHTML=(title?`<li class="mealh" style="margin:0">${title}</li>`:"")+arr.map((f,i)=>`<li><button type="button" data-i="${i}"><span class="nm">${esc(f.name)}<small>${f.src==="INDB"?"Indian Nutrient Databank":f.src==="USDA"?"USDA FoodData Central":f.src==="Product"?"Open Food Facts":"Your food"}${f.fried?" · deep-fried, may read high":""}</small></span><span class="kc">${Math.round(f.kcal100)} kcal/100 g</span></button></li>`).join("")}
 function showRecent(){const rf=S.recentFoods||[];if(rf.length)listFoods(rf.slice(0,8),"Recent");else{found=[];$("fRes").innerHTML=""}}
 $("foodForm").onsubmit=async e=>{e.preventDefault();const q=$("fQuery").value.trim();if(!q){showRecent();return}
   $("fPick").hidden=true;$("fMsg").textContent="Searching…";$("fRes").innerHTML="";
-  const [a,b]=await Promise.allSettled([searchFdc(q),searchOff(q)]);
-  const all=[...(a.status==="fulfilled"?a.value:[]),...(b.status==="fulfilled"?b.value:[])];
-  const words=q.toLowerCase().split(/\s+/).filter(w=>w.length>1),score=f=>{const n=f.name.toLowerCase();return words.filter(w=>n.includes(w)).length};
+  const [a,b,c]=await Promise.allSettled([searchFdc(q),searchOff(q),searchIndb(q)]);
+  const all=[...(c.status==="fulfilled"?c.value:[]),...(a.status==="fulfilled"?a.value:[]),...(b.status==="fulfilled"?b.value:[])];
+  const words=q.toLowerCase().split(/\s+/).filter(w=>w.length>1),score=f=>{const n=f.name.toLowerCase();return words.filter(w=>wordHit(n,w)).length};
   const sc=all.map((f,i)=>({f,i,s:score(f)})),best=Math.max(0,...sc.map(x=>x.s));
   const res=sc.filter(x=>x.s>0||best===0).sort((x,y)=>y.s-x.s||x.i-y.i).map(x=>x.f);
-  let msg=res.length?`${res.length} matches. Tap one to add it.`:"No matches. Try a simpler name (e.g. \u201cfried rice\u201d), or add the calories yourself below.";
-  if(a.status==="rejected"&&a.reason.message==="limit")msg+=" The USDA demo key has hit its hourly limit; add your own free key under Food database settings.";
-  else if(a.status==="rejected"&&b.status==="rejected")msg=navigator.onLine?"The food databases didn't respond. Try again in a moment.":"You're offline. Food search needs internet; you can still add calories yourself below.";
+  let msg=res.length?`${res.length} ${res.length===1?"match":"matches"}. Tap one to add it.`:"No matches. Try a simpler name (e.g. \u201cfried rice\u201d), or add the calories yourself below.";
+  if(a.status==="rejected"&&a.reason.message==="limit")msg+=" (USDA results are paused: the shared key hit its hourly limit. Add your own free key under Food database settings.)";
+  else if(!res.length&&a.status==="rejected"&&b.status==="rejected")msg=navigator.onLine?"The food databases didn't respond. Try again in a moment.":"You're offline. Food search needs internet; you can still add calories yourself below.";
   $("fMsg").textContent=msg;listFoods(res)};
 $("fRes").onclick=e=>{const b=e.target.closest("button[data-i]");if(!b)return;picked=found[+b.dataset.i];
   $("pkName").textContent=picked.name;
   const opts=[...picked.portions.map(p=>({label:/\d\s*g\b/.test(p.label)?p.label:p.label+" ("+Math.round(p.g)+" g)",g:p.g})),{label:"grams",g:1}];
   $("pkUnit").innerHTML=opts.map((o,i)=>`<option value="${o.g}">${esc(o.label)}</option>`).join("");
-  $("pkQty").value=opts.length>1?1:100;$("pkPer").textContent=`(${Math.round(picked.kcal100)} kcal per 100 g)`;
+  $("pkQty").value=opts.length>1?1:100;$("pkPer").textContent=`(${Math.round(picked.kcal100)} kcal per 100 g)`+(picked.fried?" Deep-fried recipes count all the frying oil, so this may be high.":"");
   $("fPick").hidden=false;calcPick();$("pkQty").focus()};
 function pickGrams(){return (parseFloat($("pkQty").value)||0)*(parseFloat($("pkUnit").value)||0)}
 function calcPick(){if(!picked)return;$("pkKcal").textContent=Math.round(picked.kcal100*pickGrams()/100)}
