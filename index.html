@@ -562,8 +562,8 @@ function drawTimer(){
   const c=$("chip");c.hidden=!endAt;if(endAt)c.textContent=(mode==="focus"?"Focusing ":"Break ")+fmt(left)+" ›"}
 function setMode(m){stop();mode=m;total=S.mins[m]*60;left=total;
   document.querySelectorAll(".mode").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mode===m));drawTimer()}
-async function start(){endAt=Date.now()+left*1000;tick=setInterval(step,250);try{lock=await navigator.wakeLock?.request("screen")}catch(e){}drawTimer()}
-function stop(){clearInterval(tick);tick=null;endAt=null;try{lock?.release()}catch(e){}lock=null}
+async function start(){endAt=Date.now()+left*1000;tick=setInterval(step,250);pushFocus();try{lock=await navigator.wakeLock?.request("screen")}catch(e){}drawTimer()}
+function stop(){clearInterval(tick);tick=null;endAt=null;pushFocus();try{lock?.release()}catch(e){}lock=null}
 function step(){left=Math.max(0,Math.round((endAt-Date.now())/1000));if(left===0)finish();drawTimer()}
 function finish(){stop();chime();
   if(mode==="focus"){const st=day(today()).study;st.min+=S.mins.focus;st.sessions++;st.subj[S.subject]=(st.subj[S.subject]||0)+S.mins.focus;save();
@@ -739,6 +739,11 @@ function merge(a,b){const o=Object.assign({},a);
   for(const k in b.days||{})if(!o.days[k]||(b.days[k]._t||0)>(o.days[k]._t||0))o.days[k]=b.days[k];
   o.v=2;return o}
 function queueSync(){if(!user)return;clearTimeout(qt);qt=setTimeout(sync,1500)}
+/* study mode for the Windows companion: on only while a focus session is running */
+let lastFocus="";
+function pushFocus(){if(!SB||!user)return;const on=!!endAt&&mode==="focus",until=on?new Date(endAt).toISOString():null,sig=on+"|"+until;
+  if(sig===lastFocus)return;lastFocus=sig;
+  SB.from("lockin_focus").upsert({user_id:user.id,active:on,until,updated_at:new Date().toISOString()}).then(({error})=>{if(error)lastFocus=""})}
 async function sync(){if(!SB||!user)return;if(syncing){again=true;return}
   if(!navigator.onLine){smsg("Offline. Changes will sync when you reconnect.");return}
   syncing=true;smsg("Syncing…");
