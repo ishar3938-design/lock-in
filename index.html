@@ -152,6 +152,25 @@ a.ext{color:var(--accent);text-decoration:none;font-weight:500}
 .danger.armed{border-color:#C2412D;color:#C2412D}
 .dots28{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;max-width:320px}
 .dots28 .dot{width:100%;height:auto;aspect-ratio:1;max-width:100%;border-radius:6px}
+.yearnav{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.yearnav button{padding:6px 14px}
+.yearnav b{font-variant-numeric:tabular-nums;min-width:3em;text-align:center}
+.months{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.month{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:8px;min-width:0}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.mgrid i{font-style:normal;font-size:.65rem;color:var(--muted);text-align:center}
+.cell{aspect-ratio:1;border-radius:5px;border:0;padding:0;background:var(--line);max-width:100%;cursor:pointer}
+.cell.l1{background:color-mix(in srgb,var(--rest) 30%,var(--line))}
+.cell.l2{background:color-mix(in srgb,var(--rest) 55%,var(--line))}
+.cell.l3{background:color-mix(in srgb,var(--rest) 78%,var(--line))}
+.cell.l4{background:var(--rest)}
+.cell.fut,.cell.pre{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.cell.fut{cursor:default}
+.cell.now{outline:2px solid var(--accent);outline-offset:1px}
+.cell.sel{outline:2px solid var(--ink);outline-offset:1px}
+#week{cursor:pointer}
+#hDay .tick{width:1.4em;text-align:center;font-weight:700;color:var(--rest);flex:none}
+#hDay li.miss .tick,#hDay li.miss .t{color:var(--muted)}
 @media (prefers-reduced-motion:reduce){.prog{transition:none}}
 </style>
 </head>
@@ -168,7 +187,7 @@ a.ext{color:var(--accent);text-decoration:none;font-weight:500}
   <a class="chip" id="chip" href="#study" hidden></a>
   <ul class="habits" id="habits"></ul>
   <section class="panel">
-    <h2>Last 7 days</h2>
+    <h2 style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">Last 7 days <a class="back" href="#history">Full history ›</a></h2>
     <div class="week" id="week"></div>
   </section>
   <form class="row" id="addHabit">
@@ -233,6 +252,12 @@ a.ext{color:var(--accent);text-decoration:none;font-weight:500}
           <label class="field"><span class="label">Focus (min)</span><input id="mFocus" type="number" min="1" max="120"></label>
           <label class="field"><span class="label">Short (min)</span><input id="mShort" type="number" min="1" max="30"></label>
           <label class="field"><span class="label">Long (min)</span><input id="mLong" type="number" min="1" max="60"></label>
+        </div>
+        <button class="ghost" type="button" id="editSubj" style="margin-top:12px;padding:6px 12px;font-size:.85rem">Edit subjects</button>
+        <div id="subjEditor" hidden style="margin-top:4px">
+          <ul class="list" id="subjList"></ul>
+          <form class="row" id="addSubj" style="margin-top:10px"><input type="text" id="newSubj" placeholder="Add a subject, e.g. Maths AA" aria-label="New subject"><button class="btn soft" type="submit">Add</button></form>
+          <p class="hint">Deleting a subject keeps the study time already logged under it.</p>
         </div>
       </section>
       <section class="panel" aria-label="Study playlist">
@@ -398,6 +423,23 @@ a.ext{color:var(--accent);text-decoration:none;font-weight:500}
   </div>
 </section>
 
+<!-- HISTORY -->
+<section class="view" id="v-history" hidden>
+  <a class="back" href="#">← Today</a>
+  <h1>History</h1>
+  <div class="row">
+    <select id="hHabit" aria-label="Habit to show"></select>
+    <div class="yearnav"><button class="ghost" id="hPrev" type="button" aria-label="Previous year">‹</button><b id="hYear"></b><button class="ghost" id="hNext" type="button" aria-label="Next year">›</button></div>
+  </div>
+  <section class="panel"><div class="nums" style="margin:0">
+    <div class="num"><span class="label" id="hFullLbl">Perfect days</span><b id="hFull">0</b></div>
+    <div class="num"><span class="label">Hit rate</span><b id="hRate">–</b></div>
+    <div class="num"><span class="label">Best streak</span><b id="hBest">0d</b></div>
+  </div><p class="hint">Darker squares mean more habits done. Counts start from the first day you used the app.</p></section>
+  <section class="panel" id="hDay"></section>
+  <div class="months" id="hMonths"></div>
+</section>
+
 <!-- CUSTOM HABIT -->
 <section class="view" id="v-custom" hidden style="max-width:640px">
   <a class="back" href="#">← Today</a>
@@ -430,7 +472,7 @@ let S={v:2,days:{},
     {id:"training",name:"Training",kind:"training"},{id:"chores",name:"Chores",kind:"chores"},
     {id:"plan",name:"Plan tomorrow",kind:"plan"},{id:"water",name:"Water & meals",kind:"water"}],
   chores:[{id:"c1",text:"Make bed / tidy room"},{id:"c2",text:"Dishes / kitchen"},{id:"c3",text:"Laundry"},{id:"c4",text:"Cooking"}],
-  tasks:[],playlist:[],mins:{focus:25,short:5,long:15},subject:"Chemistry",waterGoal:8};
+  tasks:[],playlist:[],mins:{focus:25,short:5,long:15},subject:"Chemistry",waterGoal:8,subjects:SUBJECTS.slice()};
 try{const d=JSON.parse(localStorage.getItem(KEY));
   if(d&&d.v===2)S=Object.assign(S,d);
   else if(d){ // carry over version 1 data
@@ -442,7 +484,7 @@ const day=k=>{const r=S.days[k]||(S.days[k]=blank());const b=blank();for(const f
 const peek=k=>S.days[k]||{};
 const localSave=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 /* change stamps so two devices can merge day by day */
-const TOP=["habits","chores","tasks","playlist","mins","subject","waterGoal"];
+const TOP=["habits","chores","tasks","playlist","mins","subject","waterGoal","subjects"];
 const topJSON=()=>JSON.stringify(TOP.map(f=>S[f]));
 const dayJSON=d=>{const {_t,...r}=d;return JSON.stringify(r)};
 let prev={top:"",days:{}};
@@ -496,7 +538,17 @@ $("addHabit").onsubmit=e=>{e.preventDefault();const v=$("newHabit").value.trim()
   S.habits.push({id:uid(),name:v,kind:"custom"});$("newHabit").value="";save();renderHome()};
 
 /* ---------- Study ---------- */
-$("subject").innerHTML=SUBJECTS.map(s=>`<option${s===S.subject?" selected":""}>${s}</option>`).join("");
+function renderSubjects(){if(!Array.isArray(S.subjects)||!S.subjects.length)S.subjects=["Other"];
+  if(!S.subjects.includes(S.subject))S.subject=S.subjects[0];
+  $("subject").innerHTML=S.subjects.map(s=>`<option${s===S.subject?" selected":""}>${esc(s)}</option>`).join("");
+  $("subjList").innerHTML=S.subjects.map((s,i)=>`<li data-i="${i}"><span class="t">${esc(s)}</span>${S.subjects.length>1?`<button class="del" type="button" aria-label="Delete ${esc(s)}">×</button>`:""}</li>`).join("")}
+renderSubjects();
+$("editSubj").onclick=()=>{const e=$("subjEditor");e.hidden=!e.hidden;$("editSubj").textContent=e.hidden?"Edit subjects":"Done"};
+$("addSubj").onsubmit=e=>{e.preventDefault();const v=$("newSubj").value.trim();if(!v)return;
+  if(S.subjects.some(s=>s.toLowerCase()===v.toLowerCase())){$("newSubj").select();return}
+  S.subjects.push(v);$("newSubj").value="";save();renderSubjects()};
+$("subjList").onclick=e=>{if(!e.target.matches(".del"))return;const i=+e.target.closest("li").dataset.i;
+  if(S.subjects.length<=1)return;S.subjects.splice(i,1);save();renderSubjects();drawTimer()};
 $("mFocus").value=S.mins.focus;$("mShort").value=S.mins.short;$("mLong").value=S.mins.long;
 const CC=2*Math.PI*52,prog=$("prog");prog.style.strokeDasharray=CC;
 let mode="focus",total=S.mins.focus*60,left=total,endAt=null,tick=null,lock=null,actx;
@@ -621,6 +673,41 @@ document.querySelectorAll(".meal").forEach(b=>b.onclick=()=>{const r=day(today()
 function renderWater(){const r=peek(today());$("wCount").textContent=r.water||0;$("wGoalTxt").textContent=`of ${S.waterGoal} glasses`;
   document.querySelectorAll(".meal").forEach(b=>b.setAttribute("aria-pressed",!!r.meals?.[b.dataset.m]))}
 
+/* ---------- History ---------- */
+let hYear=new Date().getFullYear(),hSel=null;
+function hVal(k,hid){const hs=S.habits;if(hid==="all")return hs.length?hs.filter(h=>isDone(h,k)).length/hs.length:0;
+  const h=hs.find(x=>x.id===hid);return h&&isDone(h,k)?1:0}
+function renderHistory(){const sel=$("hHabit"),cur=sel.value||"all";
+  sel.innerHTML='<option value="all">All habits</option>'+S.habits.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join("");
+  sel.value=[...sel.options].some(o=>o.value===cur)?cur:"all";const hid=sel.value,t=today();
+  const start=Object.keys(S.days).sort()[0]||t;
+  $("hYear").textContent=hYear;$("hNext").disabled=hYear>=new Date().getFullYear();
+  let full=0,days=0,best=0,run=0,html="";
+  for(let m=0;m<12;m++){const first=new Date(hYear,m,1),n=new Date(hYear,m+1,0).getDate(),off=(first.getDay()+6)%7;
+    let cells="";for(let i=0;i<off;i++)cells+="<span></span>";
+    for(let d=1;d<=n;d++){const k=dayKey(new Date(hYear,m,d));let cls="cell";
+      if(k>t){cells+=`<span class="cell fut"></span>`;continue}
+      const v=hVal(k,hid);
+      if(k<start)cls+=" pre";else{days++;cls+=" l"+Math.ceil(v*4);if(v>=1){full++;run++;best=Math.max(best,run)}else run=0}
+      if(k===t)cls+=" now";if(k===hSel)cls+=" sel";
+      cells+=`<button class="${cls}" type="button" data-k="${k}" aria-label="${k}"></button>`}
+    html+=`<div class="month"><span class="label">${first.toLocaleDateString(undefined,{month:"long"})}</span><div class="mgrid">${["M","T","W","T","F","S","S"].map(x=>`<i>${x}</i>`).join("")}${cells}</div></div>`}
+  $("hMonths").innerHTML=html;
+  $("hFullLbl").textContent=hid==="all"?"Perfect days":"Days done";$("hFull").textContent=full;
+  $("hRate").textContent=days?Math.round(full/days*100)+"%":"–";$("hBest").textContent=best+"d";
+  renderDay()}
+function renderDay(){const p=$("hDay");
+  if(!hSel){p.innerHTML='<p class="empty" style="margin:0;padding:0">Tap any day below to see what you completed.</p>';return}
+  const r=peek(hSel),[y,m,d]=hSel.split("-").map(Number),dt=new Date(y,m-1,d),extra=[];
+  if(r.study&&r.study.min)extra.push(r.study.min+" min studied");if(r.sleep)extra.push(r.sleep.h.toFixed(1)+" h sleep");
+  if((r.train||[]).length)extra.push(r.train.length+" training entries");if(r.water)extra.push(r.water+" glasses of water");
+  p.innerHTML=`<h2>${dt.toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</h2><ul class="list">${S.habits.map(h=>{const ok=isDone(h,hSel);return `<li class="${ok?"":"miss"}"><span class="tick">${ok?"✓":"–"}</span><span class="t">${esc(h.name)}</span></li>`}).join("")}</ul>${extra.length?`<p class="hint">${extra.join(" · ")}</p>`:""}`}
+$("hMonths").onclick=e=>{const b=e.target.closest("button[data-k]");if(!b)return;hSel=b.dataset.k;renderHistory()};
+$("hHabit").onchange=renderHistory;
+$("hPrev").onclick=()=>{hYear--;renderHistory()};
+$("hNext").onclick=()=>{if(hYear<new Date().getFullYear()){hYear++;renderHistory()}};
+$("week").onclick=()=>{location.hash="history"};
+
 /* ---------- Custom habit ---------- */
 let cur=null;
 function renderCustom(){const h=S.habits.find(x=>"habit-"+x.id===location.hash.slice(1));if(!h){location.hash="";return}cur=h;
@@ -633,8 +720,8 @@ $("cDel").onclick=()=>{const b=$("cDel");if(!b.classList.contains("armed")){b.cl
   S.habits=S.habits.filter(x=>x!==cur);save();location.hash=""};
 
 /* ---------- Routing ---------- */
-const VIEWS={study:renderStudy,sleep:renderSleep,training:renderTraining,chores:renderChores,plan:renderPlan,water:renderWater};
-function render(){const h=location.hash.slice(1);const v=VIEWS[h]?h:h.startsWith("habit-")?"custom":"home";
+const VIEWS={history:renderHistory,study:renderStudy,sleep:renderSleep,training:renderTraining,chores:renderChores,plan:renderPlan,water:renderWater};
+function render(){renderSubjects();const h=location.hash.slice(1);const v=VIEWS[h]?h:h.startsWith("habit-")?"custom":"home";
   document.querySelectorAll(".view").forEach(s=>s.hidden=s.id!=="v-"+v);
   renderHome();if(VIEWS[v])VIEWS[v]();if(v==="custom")renderCustom()}
 let lastHash=null;
