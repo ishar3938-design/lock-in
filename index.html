@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lock In</title>
+<link rel="manifest" href="manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+<meta name="theme-color" content="#5B48E0">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lock In">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: home is a single daily checklist column; each habit opens its own page with a back link */
+:root{
+  --bg:#EFEDFB; --surface:#FFFFFF; --ink:#17142E; --muted:#67628C; --line:#DDD9F2;
+  --accent:#5B48E0; --accent-soft:#E7E3FD; --rest:#3F6FF0; --rest-soft:#E2EAFE; --glow:rgba(124,98,255,.16);
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F0D1F; --surface:#1A1733; --ink:#ECEAF8; --muted:#A39EC6; --line:#2D2950;
+  --accent:#A08CFF; --accent-soft:#2B2457; --rest:#7FA2FF; --rest-soft:#1E2A55; --glow:rgba(140,110,255,.22); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F0D1F; --surface:#1A1733; --ink:#ECEAF8; --muted:#A39EC6; --line:#2D2950;
+  --accent:#A08CFF; --accent-soft:#2B2457; --rest:#7FA2FF; --rest-soft:#1E2A55; --glow:rgba(140,110,255,.22); color-scheme:dark}
+*{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg) radial-gradient(1100px 520px at 50% -160px,var(--glow),transparent 70%) no-repeat;color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 40px}
+.view{max-width:1040px;margin:0 auto;display:grid;gap:20px}
+#v-home{max-width:640px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:800;font-size:2rem;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.date{color:var(--muted);font-size:.9rem}
+.back{display:inline-flex;gap:6px;align-items:center;color:var(--accent);text-decoration:none;font-weight:600;font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px;align-items:start}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+@media (max-width:760px){.grid,.grid2{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;min-width:0}
+.col{display:grid;gap:20px;min-width:0}
+h2{font-family:var(--display);font-weight:600;font-size:1.1rem;margin:0 0 12px}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.hint{color:var(--muted);font-size:.85rem;margin:8px 0 0}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=text],input[type=number],input[type=time],input[type=url],select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+.btn{border:0;background:var(--accent);color:#fff;border-radius:8px;padding:9px 16px;font-weight:600}
+.btn.soft{background:var(--accent-soft);color:var(--accent)}
+.ghost{background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 16px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.row>*{flex:1 1 90px;min-width:0}
+.row>.btn,.row>.ghost{flex:0 0 auto}
+.field{display:grid;gap:4px}
+
+/* Home */
+.summary{display:flex;align-items:center;gap:18px}
+.ring{width:84px;height:84px;flex:none;position:relative}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:grid;place-content:center;font-family:var(--display);font-size:1.4rem;font-weight:800;font-variant-numeric:tabular-nums}
+.summary p{margin:0;color:var(--muted)}
+.summary strong{display:block;color:var(--ink);font-family:var(--display);font-size:1.25rem;font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:6px 14px;text-decoration:none;font-weight:600;font-variant-numeric:tabular-nums;justify-self:start}
+.habits{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.habit{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.check{width:30px;height:30px;flex:none;border-radius:50%;border:2px solid var(--line);background:transparent;display:grid;place-content:center;color:transparent;font-weight:800;font-size:.9rem;padding:0}
+.habit.done .check{background:var(--rest);border-color:var(--rest);color:#fff}
+.open{flex:1;min-width:0;display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit}
+.open span{flex:1;min-width:0}
+.open b{display:block;font-weight:600;font-size:1.02rem}
+.habit.done .open b{color:var(--muted)}
+.open small{color:var(--muted);font-size:.85rem}
+.streak{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.chev{color:var(--muted);font-size:1.2rem}
+.week{overflow-x:auto}
+.week table{border-collapse:collapse;width:100%;min-width:360px;font-size:.82rem}
+.week th{font-weight:500;color:var(--muted);padding:4px;text-align:center}
+.week th:first-child,.week td:first-child{text-align:left;white-space:nowrap;padding-right:10px}
+.week td{padding:5px 4px;text-align:center}
+.dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--line)}
+.dot.on{background:var(--rest)}
+
+/* Timer */
+.modes{display:flex;gap:6px;flex-wrap:wrap}
+.mode{border:1px solid var(--line);background:transparent;border-radius:999px;padding:6px 14px;font-size:.88rem}
+.mode[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.dial{position:relative;width:min(260px,100%);aspect-ratio:1;max-width:100%;margin:22px auto 10px}
+.dial svg{width:100%;height:100%;transform:rotate(-90deg)}
+.track{fill:none;stroke:var(--line);stroke-width:10}
+.prog{fill:none;stroke:var(--accent);stroke-width:10;stroke-linecap:round;transition:stroke-dashoffset .4s linear}
+.rest .prog{stroke:var(--rest)}
+.readout{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.time{font-family:var(--mono);font-size:3.2rem;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.phase{color:var(--muted);font-size:.85rem}
+.controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.primary{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:11px 28px;font-weight:600;min-width:120px}
+.rest .primary{background:var(--rest)}
+.settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.goalbar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:8px}
+.goalbar i{display:block;height:100%;background:var(--accent)}
+
+/* Lists */
+ul.list{list-style:none;margin:12px 0 0;padding:0;display:grid}
+ul.list li{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line)}
+ul.list li:last-child{border-bottom:0}
+ul.list li input[type=checkbox]{width:18px;height:18px;accent-color:var(--rest);flex:none}
+ul.list li .t{flex:1;min-width:0;overflow-wrap:anywhere}
+ul.list li.done .t{text-decoration:line-through;color:var(--muted)}
+.tag{font-size:.72rem;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);flex:none;font-style:normal}
+.del{border:0;background:transparent;color:var(--muted);padding:2px 6px;font-size:1.15rem;line-height:1}
+.empty{color:var(--muted);font-size:.9rem;padding:10px 0}
+a.ext{color:var(--accent);text-decoration:none;font-weight:500}
+
+/* Stats */
+.nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+.num b{display:block;font-family:var(--display);font-size:1.6rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.15}
+.bars{position:relative;display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.bar{display:grid;gap:4px;text-align:center;font-size:.72rem;color:var(--muted)}
+.bar .tr{height:90px;display:flex;align-items:flex-end}
+.bar i{display:block;width:100%;background:var(--accent-soft);border-radius:5px 5px 2px 2px;min-height:3px}
+.bar.today i{background:var(--accent)}
+.bar span{height:18px;line-height:18px}
+.gl{position:absolute;left:0;right:0;border-top:2px dashed var(--rest);pointer-events:none}
+.subj{margin-top:16px;display:grid;gap:6px}
+.srow{display:grid;grid-template-columns:7.5em 1fr 3.5em;gap:8px;align-items:center;font-size:.85rem}
+.srow .meter{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.srow .meter i{display:block;height:100%;background:var(--accent)}
+.srow span:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+
+/* Training / water */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.seg button{border:0;background:transparent;padding:7px 16px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.big{font-family:var(--display);font-size:3rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.counter{display:flex;align-items:center;gap:18px;justify-content:center;margin:10px 0}
+.round{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-size:1.4rem}
+.meals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.meal{border:1px solid var(--line);background:transparent;border-radius:12px;padding:14px 8px;font-weight:600}
+.meal[aria-pressed="true"]{background:var(--rest-soft);border-color:var(--rest);color:var(--rest)}
+.danger{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:8px;padding:8px 14px}
+.danger.armed{border-color:#C2412D;color:#C2412D}
+.dots28{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;max-width:320px}
+.dots28 .dot{width:100%;height:auto;aspect-ratio:1;max-width:100%;border-radius:6px}
+@media (prefers-reduced-motion:reduce){.prog{transition:none}}
+</style>
+</head>
+<body>
+
+
+<!-- HOME -->
+<section class="view" id="v-home">
+  <header><h1>Lock In</h1><span class="date" id="date"></span></header>
+  <div class="summary">
+    <div class="ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="track" cx="60" cy="60" r="52"/><circle class="prog" id="homeRing" cx="60" cy="60" r="52" style="stroke:var(--rest)"/></svg><b id="homeCount">0/6</b></div>
+    <p><strong id="homeMsg">Let's get going</strong><span id="homeStreak"></span></p>
+  </div>
+  <a class="chip" id="chip" href="#study" hidden></a>
+  <ul class="habits" id="habits"></ul>
+  <section class="panel">
+    <h2>Last 7 days</h2>
+    <div class="week" id="week"></div>
+  </section>
+  <form class="row" id="addHabit">
+    <input type="text" id="newHabit" placeholder="Add another daily habit" aria-label="New habit">
+    <button class="btn soft" type="submit">Add habit</button>
+  </form>
+  <section class="panel" id="syncPanel">
+    <h2>Sync</h2>
+    <form id="syncSetup" class="row">
+      <label class="field" style="flex-basis:100%"><span class="label">Supabase project URL</span><input type="url" id="sbUrl" placeholder="https://xxxx.supabase.co"></label>
+      <label class="field" style="flex-basis:100%"><span class="label">Anon / publishable key</span><input type="text" id="sbKey" placeholder="eyJ… or sb_publishable_…"></label>
+      <button class="btn" type="submit">Connect</button>
+    </form>
+    <form id="syncAuth" class="row" hidden>
+      <label class="field" style="flex-basis:100%"><span class="label">Email</span><input type="email" id="sbEmail" autocomplete="email" style="border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;width:100%"></label>
+      <label class="field" style="flex-basis:100%"><span class="label">Password</span><input type="password" id="sbPass" autocomplete="current-password" style="border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;width:100%"></label>
+      <button class="btn" type="submit">Sign in</button>
+      <button class="ghost" type="button" id="sbSignup">Create account</button>
+      <button class="ghost" type="button" id="sbChange1">Change project</button>
+    </form>
+    <div id="syncOn" class="row" hidden>
+      <p style="margin:0;flex-basis:100%">Signed in as <b id="sbWho"></b></p>
+      <button class="btn soft" type="button" id="sbNow">Sync now</button>
+      <button class="ghost" type="button" id="sbOut">Sign out</button>
+    </div>
+    <p class="hint" id="syncMsg">Connect your Supabase project to sync between your phone and laptop.</p>
+  </section>
+  <section class="panel">
+    <h2>Backup</h2>
+    <div class="row">
+      <button class="btn soft" id="exportBtn" type="button">Download backup</button>
+      <label class="ghost" style="text-align:center;cursor:pointer">Restore from backup<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+    </div>
+    <p class="hint" id="backupMsg">Your data is saved on this device only. Download a backup to keep it safe or move it to another device.</p>
+  </section>
+</section>
+
+<!-- STUDY -->
+<section class="view" id="v-study" hidden>
+  <a class="back" href="#">← Today</a>
+  <h1>2 hours of deep study</h1>
+  <div class="grid">
+    <div class="col">
+      <section class="panel" id="timerPanel" aria-label="Focus timer">
+        <div class="modes" role="group" aria-label="Session type">
+          <button class="mode" data-mode="focus" aria-pressed="true">Focus</button>
+          <button class="mode" data-mode="short" aria-pressed="false">Short break</button>
+          <button class="mode" data-mode="long" aria-pressed="false">Long break</button>
+        </div>
+        <div class="dial">
+          <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="track" cx="60" cy="60" r="52"/><circle class="prog" id="prog" cx="60" cy="60" r="52"/></svg>
+          <div class="readout"><div class="time" id="time">25:00</div><div class="phase" id="phase">Ready to focus</div></div>
+        </div>
+        <div class="controls">
+          <button class="primary" id="start">Start</button>
+          <button class="ghost" id="reset">Reset</button>
+          <button class="ghost" id="skip">Skip</button>
+        </div>
+        <div style="margin-top:18px"><span class="label" id="goalTxt">0 / 120 min today</span><div class="goalbar"><i id="goalFill" style="width:0"></i></div></div>
+        <div class="settings">
+          <label class="field"><span class="label">Subject</span><select id="subject"></select></label>
+          <label class="field"><span class="label">Focus (min)</span><input id="mFocus" type="number" min="1" max="120"></label>
+          <label class="field"><span class="label">Short (min)</span><input id="mShort" type="number" min="1" max="30"></label>
+          <label class="field"><span class="label">Long (min)</span><input id="mLong" type="number" min="1" max="60"></label>
+        </div>
+      </section>
+      <section class="panel" aria-label="Study playlist">
+        <h2>Study playlist</h2>
+        <form class="row" id="addLink">
+          <input type="text" id="linkName" placeholder="Name, e.g. Lo-fi focus" aria-label="Playlist name">
+          <input type="url" id="linkUrl" placeholder="https://…" aria-label="Playlist link">
+          <button class="btn soft" type="submit">Add</button>
+        </form>
+        <ul class="list" id="links"></ul>
+      </section>
+    </div>
+    <div class="col">
+      <section class="panel" aria-label="Study tasks">
+        <h2>Study tasks</h2>
+        <form class="row" id="addTask">
+          <input type="text" id="taskInput" placeholder="e.g. Draft Chemistry IA method" aria-label="New task">
+          <button class="btn soft" type="submit">Add</button>
+        </form>
+        <ul class="list" id="tasks"></ul>
+      </section>
+      <section class="panel" aria-label="Study stats">
+        <h2>Progress</h2>
+        <div class="nums">
+          <div class="num"><span class="label">Today</span><b id="sToday">0m</b></div>
+          <div class="num"><span class="label">2h streak</span><b id="sStreak">0d</b></div>
+          <div class="num"><span class="label">7 days</span><b id="sWeek">0h</b></div>
+        </div>
+        <div class="bars" id="studyBars"></div>
+        <div class="subj" id="subj"></div>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- SLEEP -->
+<section class="view" id="v-sleep" hidden>
+  <a class="back" href="#">← Today</a>
+  <h1>Sleep 8 hours</h1>
+  <div class="grid2">
+    <section class="panel">
+      <h2>Last night</h2>
+      <form class="row" id="sleepForm">
+        <label class="field"><span class="label">Went to bed</span><input type="time" id="bed" value="22:30"></label>
+        <label class="field"><span class="label">Woke up</span><input type="time" id="wake" value="06:30"></label>
+        <button class="btn" type="submit">Save</button>
+      </form>
+      <p class="hint" id="sleepNow">Not logged yet today.</p>
+    </section>
+    <section class="panel">
+      <h2>Last 7 nights</h2>
+      <div class="nums">
+        <div class="num"><span class="label">Average</span><b id="slAvg">–</b></div>
+        <div class="num"><span class="label">8h nights</span><b id="slHit">0</b></div>
+        <div class="num"><span class="label">Streak</span><b id="slStreak">0d</b></div>
+      </div>
+      <div class="bars" id="sleepBars"></div>
+      <p class="hint">Dashed line marks 8 hours.</p>
+    </section>
+  </div>
+</section>
+
+<!-- TRAINING -->
+<section class="view" id="v-training" hidden>
+  <a class="back" href="#">← Today</a>
+  <h1>Training</h1>
+  <div class="grid2">
+    <section class="panel">
+      <h2>Log a session</h2>
+      <div class="seg" role="group" aria-label="Training type">
+        <button data-k="gym" aria-pressed="true">Gym</button><button data-k="cardio" aria-pressed="false">Running / cardio</button>
+      </div>
+      <form id="gymForm" class="row">
+        <label class="field" style="flex-basis:100%"><span class="label">Exercise</span><input type="text" id="gName" list="exList" placeholder="e.g. Bench press"></label>
+        <label class="field"><span class="label">Sets</span><input type="number" id="gSets" min="1" value="3"></label>
+        <label class="field"><span class="label">Reps</span><input type="number" id="gReps" min="1" value="8"></label>
+        <label class="field"><span class="label">Weight (kg)</span><input type="number" id="gKg" min="0" step="0.5"></label>
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <datalist id="exList"></datalist>
+      <p class="hint" id="lastTime"></p>
+      <form id="cardioForm" class="row" hidden>
+        <label class="field"><span class="label">Activity</span><select id="cType"><option>Run</option><option>Bike</option><option>Row</option><option>Swim</option><option>Other</option></select></label>
+        <label class="field"><span class="label">Distance (km)</span><input type="number" id="cKm" min="0" step="0.01"></label>
+        <label class="field"><span class="label">Time (min)</span><input type="number" id="cMin" min="1"></label>
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <h2 style="margin-top:20px">Today</h2>
+      <ul class="list" id="trainToday"></ul>
+    </section>
+    <section class="panel">
+      <h2>This week</h2>
+      <div class="nums">
+        <div class="num"><span class="label">Days trained</span><b id="trDays">0</b></div>
+        <div class="num"><span class="label">Km covered</span><b id="trKm">0</b></div>
+        <div class="num"><span class="label">Streak</span><b id="trStreak">0d</b></div>
+      </div>
+      <div class="bars" id="trainBars"></div>
+      <p class="hint">Bars show exercises and cardio sessions logged each day. On a rest day, tick Training on the home screen to keep your streak.</p>
+    </section>
+  </div>
+</section>
+
+<!-- CHORES -->
+<section class="view" id="v-chores" hidden style="max-width:640px">
+  <a class="back" href="#">← Today</a>
+  <h1>Chores</h1>
+  <section class="panel">
+    <h2 id="choreHead">Today</h2>
+    <ul class="list" id="choreList"></ul>
+    <form class="row" id="addChore" style="margin-top:14px">
+      <input type="text" id="newChore" placeholder="Add a chore" aria-label="New chore">
+      <button class="btn soft" type="submit">Add</button>
+    </form>
+    <p class="hint">Chores reset each morning. Tick them all and Chores is done for the day.</p>
+  </section>
+</section>
+
+<!-- PLAN -->
+<section class="view" id="v-plan" hidden>
+  <a class="back" href="#">← Today</a>
+  <h1>Plan tomorrow</h1>
+  <div class="grid2">
+    <section class="panel">
+      <h2>Tomorrow</h2>
+      <form class="row" id="addPlan">
+        <input type="text" id="planInput" placeholder="e.g. Econ commentary paragraph 2" aria-label="Tomorrow's task">
+        <button class="btn soft" type="submit">Add</button>
+      </form>
+      <ul class="list" id="planTomorrow"></ul>
+      <p class="hint">Add at least one item and this habit is done for today.</p>
+    </section>
+    <section class="panel">
+      <h2>Today's plan</h2>
+      <ul class="list" id="planToday"></ul>
+    </section>
+  </div>
+</section>
+
+<!-- WATER & MEALS -->
+<section class="view" id="v-water" hidden>
+  <a class="back" href="#">← Today</a>
+  <h1>Water &amp; meals</h1>
+  <div class="grid2">
+    <section class="panel">
+      <h2>Water</h2>
+      <div class="counter">
+        <button class="round" id="wMinus" aria-label="Remove a glass">−</button>
+        <div style="text-align:center"><div class="big" id="wCount">0</div><span class="label" id="wGoalTxt">of 8 glasses</span></div>
+        <button class="round" id="wPlus" aria-label="Add a glass">+</button>
+      </div>
+      <label class="field" style="max-width:160px;margin:12px auto 0"><span class="label">Daily goal (glasses)</span><input type="number" id="wGoal" min="1" max="20"></label>
+    </section>
+    <section class="panel">
+      <h2>Meals</h2>
+      <div class="meals">
+        <button class="meal" data-m="b" aria-pressed="false">Breakfast</button>
+        <button class="meal" data-m="l" aria-pressed="false">Lunch</button>
+        <button class="meal" data-m="d" aria-pressed="false">Dinner</button>
+      </div>
+      <p class="hint">Done for the day when you hit your water goal and tick all three meals.</p>
+    </section>
+  </div>
+</section>
+
+<!-- CUSTOM HABIT -->
+<section class="view" id="v-custom" hidden style="max-width:640px">
+  <a class="back" href="#">← Today</a>
+  <h1 id="cTitle"></h1>
+  <section class="panel">
+    <div class="nums">
+      <div class="num"><span class="label">Streak</span><b id="cStreak">0d</b></div>
+      <div class="num"><span class="label">Last 28 days</span><b id="cCount">0</b></div>
+      <div class="num"><span class="label">Today</span><b id="cToday">–</b></div>
+    </div>
+    <div class="dots28" id="cDots"></div>
+    <p class="hint">Each square is one day, oldest first. Tick the habit on the home screen.</p>
+    <button class="danger" id="cDel" style="margin-top:16px">Delete habit</button>
+  </section>
+</section>
+
+<script>
+const SUBJECTS=["Chemistry","Economics","Business","English","TOK","Other"];
+const KEY="lockin-v1";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dayKey=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const shift=(k,n)=>{const [y,m,d]=k.split("-").map(Number);const t=new Date(y,m-1,d+n);return dayKey(t)};
+const today=()=>dayKey(new Date());
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+/* ---------- State ---------- */
+let S={v:2,days:{},
+  habits:[{id:"study",name:"2 hours of deep study",kind:"study"},{id:"sleep",name:"Sleep 8 hours",kind:"sleep"},
+    {id:"training",name:"Training",kind:"training"},{id:"chores",name:"Chores",kind:"chores"},
+    {id:"plan",name:"Plan tomorrow",kind:"plan"},{id:"water",name:"Water & meals",kind:"water"}],
+  chores:[{id:"c1",text:"Make bed / tidy room"},{id:"c2",text:"Dishes / kitchen"},{id:"c3",text:"Laundry"},{id:"c4",text:"Cooking"}],
+  tasks:[],playlist:[],mins:{focus:25,short:5,long:15},subject:"Chemistry",waterGoal:8};
+try{const d=JSON.parse(localStorage.getItem(KEY));
+  if(d&&d.v===2)S=Object.assign(S,d);
+  else if(d){ // carry over version 1 data
+    if(d.log)for(const k in d.log)(S.days[k]=blank()).study=d.log[k];
+    if(d.tasks)S.tasks=d.tasks.filter(t=>!/^Example:/.test(t.text));
+    if(d.mins)S.mins=d.mins;if(d.subject)S.subject=d.subject}}catch(e){}
+function blank(){return{done:{},study:{min:0,sessions:0,subj:{}},sleep:null,train:[],chores:{},water:0,meals:{},plan:[]}}
+const day=k=>{const r=S.days[k]||(S.days[k]=blank());const b=blank();for(const f in b)if(r[f]===undefined)r[f]=b[f];return r};
+const peek=k=>S.days[k]||{};
+const localSave=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+/* change stamps so two devices can merge day by day */
+const TOP=["habits","chores","tasks","playlist","mins","subject","waterGoal"];
+const topJSON=()=>JSON.stringify(TOP.map(f=>S[f]));
+const dayJSON=d=>{const {_t,...r}=d;return JSON.stringify(r)};
+let prev={top:"",days:{}};
+function snapshot(){prev={top:topJSON(),days:{}};for(const k in S.days)prev.days[k]=dayJSON(S.days[k])}
+function stamp(){const now=Date.now();if(topJSON()!==prev.top)S._t=now;
+  for(const k in S.days)if(dayJSON(S.days[k])!==prev.days[k])S.days[k]._t=now;snapshot()}
+const save=()=>{stamp();localSave();queueSync()};
+
+function auto(h,k){const r=peek(k);switch(h.kind){
+  case"study":return (r.study?.min||0)>=120;
+  case"sleep":return (r.sleep?.h||0)>=8;
+  case"training":return (r.train||[]).length>0;
+  case"chores":return S.chores.length>0&&S.chores.every(c=>r.chores?.[c.id]);
+  case"plan":return (peek(shift(k,1)).plan||[]).length>0;
+  case"water":return (r.water||0)>=S.waterGoal&&["b","l","d"].every(m=>r.meals?.[m]);
+  default:return false}}
+function isDone(h,k){const m=peek(k).done?.[h.id];return m===undefined?auto(h,k):m}
+function streak(test){let n=0,k=today();if(!test(k))k=shift(k,-1);while(n<3650&&test(k)){n++;k=shift(k,-1)}return n}
+const last7=()=>{const a=[];for(let i=6;i>=0;i--)a.push(shift(today(),-i));return a};
+const wd=k=>{const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString(undefined,{weekday:"narrow"})};
+function bars(el,vals,keys,goal,fmt){const max=Math.max(goal||0,...vals,1)*1.1;
+  el.innerHTML=keys.map((k,i)=>`<div class="bar${i===6?" today":""}" title="${fmt(vals[i])}"><div class="tr"><i style="height:${vals[i]/max*100}%"></i></div><span>${wd(k)}</span></div>`).join("")
+    +(goal?`<div class="gl" style="bottom:${22+goal/max*90}px"></div>`:"")}
+
+/* ---------- Home ---------- */
+function sub(h){const r=peek(today());switch(h.kind){
+  case"study":return `${r.study?.min||0} / 120 min today`;
+  case"sleep":return r.sleep?`${r.sleep.h.toFixed(1)} h last night`:"Log last night's sleep";
+  case"training":{const n=(r.train||[]).length;return n?`${n} logged today`:"Nothing logged yet"}
+  case"chores":return `${S.chores.filter(c=>r.chores?.[c.id]).length} / ${S.chores.length} done`;
+  case"plan":{const n=(peek(shift(today(),1)).plan||[]).length;return n?`${n} item${n>1?"s":""} planned for tomorrow`:"Nothing planned yet"}
+  case"water":return `${r.water||0} / ${S.waterGoal} glasses · ${["b","l","d"].filter(m=>r.meals?.[m]).length} / 3 meals`;
+  default:return "Tap to see your history"}}
+const route=h=>["study","sleep","training","chores","plan","water"].includes(h.kind)?h.kind:"habit-"+h.id;
+function renderHome(){const k=today(),n=S.habits.filter(h=>isDone(h,k)).length,t=S.habits.length;
+  $("date").textContent=new Date().toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
+  $("homeCount").textContent=`${n}/${t}`;
+  const C=2*Math.PI*52,r=$("homeRing");r.style.strokeDasharray=C;r.style.strokeDashoffset=C*(1-(t?n/t:0));
+  $("homeMsg").textContent=n===t&&t?"Every habit done today":n===0?"Let's get going":`${t-n} to go today`;
+  const ps=streak(d=>S.habits.every(h=>isDone(h,d)));
+  $("homeStreak").textContent=ps?`${ps}-day perfect streak`:"Finish every habit to start a perfect-day streak";
+  $("habits").innerHTML=S.habits.map(h=>{const s=streak(d=>isDone(h,d));return `<li class="habit${isDone(h,k)?" done":""}">
+    <button class="check" data-id="${h.id}" aria-label="Mark ${esc(h.name)} done" aria-pressed="${isDone(h,k)}">✓</button>
+    <a class="open" href="#${route(h)}"><span><b>${esc(h.name)}</b><small>${esc(sub(h))}</small></span>
+    <em class="streak">${s?s+"d streak":""}</em><span class="chev" aria-hidden="true">›</span></a></li>`}).join("");
+  const keys=last7();
+  $("week").innerHTML=`<table><tr><th></th>${keys.map(d=>`<th>${wd(d)}</th>`).join("")}</tr>${S.habits.map(h=>`<tr><td>${esc(h.name)}</td>${keys.map(d=>`<td><span class="dot${isDone(h,d)?" on":""}"></span></td>`).join("")}</tr>`).join("")}</table>`}
+$("habits").onclick=e=>{const b=e.target.closest(".check");if(!b)return;const h=S.habits.find(x=>x.id===b.dataset.id);
+  const k=today();day(k).done[h.id]=!isDone(h,k);save();renderHome()};
+$("addHabit").onsubmit=e=>{e.preventDefault();const v=$("newHabit").value.trim();if(!v)return;
+  S.habits.push({id:uid(),name:v,kind:"custom"});$("newHabit").value="";save();renderHome()};
+
+/* ---------- Study ---------- */
+$("subject").innerHTML=SUBJECTS.map(s=>`<option${s===S.subject?" selected":""}>${s}</option>`).join("");
+$("mFocus").value=S.mins.focus;$("mShort").value=S.mins.short;$("mLong").value=S.mins.long;
+const CC=2*Math.PI*52,prog=$("prog");prog.style.strokeDasharray=CC;
+let mode="focus",total=S.mins.focus*60,left=total,endAt=null,tick=null,lock=null,actx;
+const fmt=s=>String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");
+function drawTimer(){
+  $("time").textContent=fmt(left);prog.style.strokeDashoffset=CC*(1-left/total);
+  $("timerPanel").classList.toggle("rest",mode!=="focus");
+  $("phase").textContent=endAt?(mode==="focus"?"Focusing on "+S.subject:"On a break"):(left<total?"Paused":mode==="focus"?"Ready to focus":"Break ready");
+  $("start").textContent=endAt?"Pause":left<total?"Resume":"Start";
+  document.title=endAt?fmt(left)+" · Lock In":"Lock In";
+  const c=$("chip");c.hidden=!endAt;if(endAt)c.textContent=(mode==="focus"?"Focusing ":"Break ")+fmt(left)+" ›"}
+function setMode(m){stop();mode=m;total=S.mins[m]*60;left=total;
+  document.querySelectorAll(".mode").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mode===m));drawTimer()}
+async function start(){endAt=Date.now()+left*1000;tick=setInterval(step,250);try{lock=await navigator.wakeLock?.request("screen")}catch(e){}drawTimer()}
+function stop(){clearInterval(tick);tick=null;endAt=null;try{lock?.release()}catch(e){}lock=null}
+function step(){left=Math.max(0,Math.round((endAt-Date.now())/1000));if(left===0)finish();drawTimer()}
+function finish(){stop();chime();
+  if(mode==="focus"){const st=day(today()).study;st.min+=S.mins.focus;st.sessions++;st.subj[S.subject]=(st.subj[S.subject]||0)+S.mins.focus;save();
+    render();setMode(st.sessions%4===0?"long":"short")}else setMode("focus")}
+function chime(){try{actx=actx||new AudioContext();[0,.25,.5].forEach((t,i)=>{const o=actx.createOscillator(),g=actx.createGain();
+  o.frequency.value=[660,880,990][i];g.gain.setValueAtTime(.2,actx.currentTime+t);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+t+.4);
+  o.connect(g).connect(actx.destination);o.start(actx.currentTime+t);o.stop(actx.currentTime+t+.4)})}catch(e){}}
+$("start").onclick=()=>{try{actx=actx||new AudioContext()}catch(e){}endAt?(stop(),drawTimer()):start()};
+$("reset").onclick=()=>setMode(mode);
+$("skip").onclick=()=>setMode(mode==="focus"?"short":"focus");
+document.querySelectorAll(".mode").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+$("subject").onchange=e=>{S.subject=e.target.value;save();drawTimer()};
+[["mFocus","focus"],["mShort","short"],["mLong","long"]].forEach(([id,m])=>$(id).onchange=e=>{
+  const v=Math.min(+e.target.max,Math.max(1,parseInt(e.target.value)||S.mins[m]));e.target.value=v;S.mins[m]=v;save();
+  if(m===mode&&!endAt&&left===total)setMode(m)});
+function renderStudy(){const keys=last7(),mins=keys.map(k=>peek(k).study?.min||0),m=mins[6];
+  $("goalTxt").textContent=`${m} / 120 min today`;$("goalFill").style.width=Math.min(100,m/120*100)+"%";
+  $("sToday").textContent=m>=60?(m/60).toFixed(1)+"h":m+"m";
+  $("sWeek").textContent=(mins.reduce((a,b)=>a+b,0)/60).toFixed(1)+"h";
+  $("sStreak").textContent=streak(d=>isDone(S.habits.find(h=>h.kind==="study")||{},d))+"d";
+  bars($("studyBars"),mins,keys,120,v=>v+" min");
+  const by={};keys.forEach(k=>{const s=peek(k).study?.subj||{};for(const x in s)by[x]=(by[x]||0)+s[x]});
+  const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]),top=rows[0]?rows[0][1]:1;
+  $("subj").innerHTML=rows.length?'<span class="label">Last 7 days by subject</span>'+rows.map(([x,v])=>`<div class="srow"><span>${esc(x)}</span><span class="meter"><i style="width:${v/top*100}%"></i></span><span>${v}m</span></div>`).join("")
+    :'<p class="empty">Finish a focus session and your time per subject shows up here.</p>';
+  const ul=$("tasks");ul.innerHTML=S.tasks.length?S.tasks.map(t=>`<li class="${t.done?"done":""}" data-id="${t.id}"><input type="checkbox" ${t.done?"checked":""} aria-label="Done"><span class="t">${esc(t.text)}</span><em class="tag">${esc(t.subject)}</em><button class="del" aria-label="Delete">×</button></li>`).join("")
+    :'<li class="empty">No study tasks yet. Add what you want done this session.</li>';
+  $("links").innerHTML=S.playlist.length?S.playlist.map(p=>`<li data-id="${p.id}"><a class="ext t" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)} ↗</a><button class="del" aria-label="Delete">×</button></li>`).join("")
+    :'<li class="empty">Paste a Spotify or YouTube playlist link. It opens in a new tab.</li>'}
+$("tasks").onclick=e=>{const li=e.target.closest("li[data-id]");if(!li)return;const t=S.tasks.find(x=>String(x.id)===li.dataset.id);
+  if(e.target.matches("input"))t.done=e.target.checked;else if(e.target.matches(".del"))S.tasks=S.tasks.filter(x=>x!==t);else return;save();renderStudy()};
+$("addTask").onsubmit=e=>{e.preventDefault();const v=$("taskInput").value.trim();if(!v)return;
+  S.tasks.push({id:uid(),text:v,subject:S.subject,done:false});$("taskInput").value="";save();renderStudy()};
+$("addLink").onsubmit=e=>{e.preventDefault();const u=$("linkUrl").value.trim();if(!/^https?:\/\//i.test(u)){$("linkUrl").focus();return}
+  S.playlist.push({id:uid(),name:$("linkName").value.trim()||u,url:u});$("linkName").value=$("linkUrl").value="";save();renderStudy()};
+$("links").onclick=e=>{if(!e.target.matches(".del"))return;const id=e.target.closest("li").dataset.id;S.playlist=S.playlist.filter(p=>p.id!==id);save();renderStudy()};
+
+/* ---------- Sleep ---------- */
+const hrs=(b,w)=>{const [bh,bm]=b.split(":").map(Number),[wh,wm]=w.split(":").map(Number);let m=(wh*60+wm)-(bh*60+bm);if(m<=0)m+=1440;return m/60};
+$("sleepForm").onsubmit=e=>{e.preventDefault();const b=$("bed").value,w=$("wake").value;if(!b||!w)return;
+  day(today()).sleep={bed:b,wake:w,h:hrs(b,w)};save();render()};
+function renderSleep(){const keys=last7(),v=keys.map(k=>peek(k).sleep?.h||0),r=peek(today()).sleep;
+  if(r){$("bed").value=r.bed;$("wake").value=r.wake;$("sleepNow").textContent=`${r.h.toFixed(1)} hours (${r.bed} to ${r.wake})${r.h>=8?" — goal met.":" — "+(8-r.h).toFixed(1)+" h short of 8."}`}
+  else{const prev=keys.slice(0,6).reverse().map(k=>peek(k).sleep).find(Boolean);if(prev){$("bed").value=prev.bed;$("wake").value=prev.wake}
+    $("sleepNow").textContent="Not logged yet today. Enter the night that ended this morning."}
+  const logged=v.filter(x=>x>0);$("slAvg").textContent=logged.length?(logged.reduce((a,b)=>a+b,0)/logged.length).toFixed(1)+"h":"–";
+  $("slHit").textContent=v.filter(x=>x>=8).length;
+  $("slStreak").textContent=streak(d=>isDone(S.habits.find(h=>h.kind==="sleep")||{},d))+"d";
+  bars($("sleepBars"),v,keys,8,x=>x.toFixed(1)+" h")}
+
+/* ---------- Training ---------- */
+let tk="gym";
+document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{tk=b.dataset.k;
+  document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===b));
+  $("gymForm").hidden=tk!=="gym";$("cardioForm").hidden=tk!=="cardio";$("lastTime").hidden=tk!=="gym"});
+function lastFor(name){const n=name.trim().toLowerCase();if(!n)return null;
+  const ks=Object.keys(S.days).sort().reverse();for(const k of ks){if(k===today())continue;
+    const e=(S.days[k].train||[]).filter(x=>x.kind==="gym"&&x.name.toLowerCase()===n).pop();if(e)return{k,e}}return null}
+$("gName").oninput=()=>{const l=lastFor($("gName").value);
+  $("lastTime").textContent=l?`Last time (${l.k}): ${l.e.sets} × ${l.e.reps}${l.e.kg?" @ "+l.e.kg+" kg":""}`:""};
+$("gymForm").onsubmit=e=>{e.preventDefault();const n=$("gName").value.trim();if(!n){$("gName").focus();return}
+  day(today()).train.push({id:uid(),kind:"gym",name:n,sets:+$("gSets").value||1,reps:+$("gReps").value||1,kg:parseFloat($("gKg").value)||0});
+  $("gName").value="";$("gKg").value="";$("lastTime").textContent="";save();render()};
+$("cardioForm").onsubmit=e=>{e.preventDefault();const km=parseFloat($("cKm").value)||0,min=parseInt($("cMin").value)||0;if(!km&&!min)return;
+  day(today()).train.push({id:uid(),kind:"cardio",name:$("cType").value,km,min});$("cKm").value=$("cMin").value="";save();render()};
+$("trainToday").onclick=e=>{if(!e.target.matches(".del"))return;const id=e.target.closest("li").dataset.id;
+  const r=day(today());r.train=r.train.filter(x=>x.id!==id);save();render()};
+function renderTraining(){const list=peek(today()).train||[];
+  $("trainToday").innerHTML=list.length?list.map(x=>{const d=x.kind==="gym"?`${esc(x.name)} — ${x.sets} × ${x.reps}${x.kg?" @ "+x.kg+" kg":""}`
+      :`${esc(x.name)} — ${x.km?x.km+" km":""}${x.km&&x.min?" in ":""}${x.min?x.min+" min":""}${x.km&&x.min?` (${(x.min/x.km).toFixed(1)} min/km)`:""}`;
+    return `<li data-id="${x.id}"><span class="t">${d}</span><em class="tag">${x.kind==="gym"?"Gym":"Cardio"}</em><button class="del" aria-label="Delete">×</button></li>`}).join("")
+    :'<li class="empty">Nothing logged today. Add an exercise or a run above.</li>';
+  const names=new Set();for(const k in S.days)(S.days[k].train||[]).forEach(x=>x.kind==="gym"&&names.add(x.name));
+  $("exList").innerHTML=[...names].map(n=>`<option value="${esc(n)}">`).join("");
+  const keys=last7(),cnt=keys.map(k=>(peek(k).train||[]).length);
+  $("trDays").textContent=cnt.filter(Boolean).length;
+  $("trKm").textContent=+keys.reduce((a,k)=>a+(peek(k).train||[]).reduce((s,x)=>s+(x.km||0),0),0).toFixed(1);
+  $("trStreak").textContent=streak(d=>isDone(S.habits.find(h=>h.kind==="training")||{},d))+"d";
+  bars($("trainBars"),cnt,keys,0,v=>v+" logged")}
+
+/* ---------- Chores ---------- */
+function renderChores(){const r=peek(today()).chores||{};
+  $("choreHead").textContent=`Today · ${S.chores.filter(c=>r[c.id]).length} of ${S.chores.length}`;
+  $("choreList").innerHTML=S.chores.length?S.chores.map(c=>`<li class="${r[c.id]?"done":""}" data-id="${c.id}"><input type="checkbox" ${r[c.id]?"checked":""} aria-label="Done"><span class="t">${esc(c.text)}</span><button class="del" aria-label="Remove chore">×</button></li>`).join("")
+    :'<li class="empty">No chores yet. Add the ones you do most days.</li>'}
+$("choreList").onclick=e=>{const li=e.target.closest("li[data-id]");if(!li)return;const id=li.dataset.id;
+  if(e.target.matches("input"))day(today()).chores[id]=e.target.checked;else if(e.target.matches(".del"))S.chores=S.chores.filter(c=>c.id!==id);else return;save();render()};
+$("addChore").onsubmit=e=>{e.preventDefault();const v=$("newChore").value.trim();if(!v)return;S.chores.push({id:uid(),text:v});$("newChore").value="";save();render()};
+
+/* ---------- Plan ---------- */
+function planList(el,items){el.innerHTML=items.length?items.map(p=>`<li class="${p.done?"done":""}" data-id="${p.id}"><input type="checkbox" ${p.done?"checked":""} aria-label="Done"><span class="t">${esc(p.text)}</span><button class="del" aria-label="Delete">×</button></li>`).join(""):""}
+function renderPlan(){planList($("planTomorrow"),peek(shift(today(),1)).plan||[]);
+  const t=peek(today()).plan||[];planList($("planToday"),t);
+  if(!t.length)$("planToday").innerHTML='<li class="empty">Nothing was planned for today. Tonight, add tomorrow\'s items on the left.</li>'}
+$("addPlan").onsubmit=e=>{e.preventDefault();const v=$("planInput").value.trim();if(!v)return;
+  day(shift(today(),1)).plan.push({id:uid(),text:v,done:false});$("planInput").value="";save();render()};
+[["planTomorrow",1],["planToday",0]].forEach(([id,off])=>$(id).onclick=e=>{const li=e.target.closest("li[data-id]");if(!li)return;
+  const r=day(shift(today(),off)),p=r.plan.find(x=>x.id===li.dataset.id);
+  if(e.target.matches("input"))p.done=e.target.checked;else if(e.target.matches(".del"))r.plan=r.plan.filter(x=>x!==p);else return;save();render()});
+
+/* ---------- Water & meals ---------- */
+$("wGoal").value=S.waterGoal;
+$("wPlus").onclick=()=>{day(today()).water++;save();render()};
+$("wMinus").onclick=()=>{const r=day(today());r.water=Math.max(0,r.water-1);save();render()};
+$("wGoal").onchange=e=>{S.waterGoal=Math.min(20,Math.max(1,parseInt(e.target.value)||8));e.target.value=S.waterGoal;save();render()};
+document.querySelectorAll(".meal").forEach(b=>b.onclick=()=>{const r=day(today());r.meals[b.dataset.m]=!r.meals[b.dataset.m];save();render()});
+function renderWater(){const r=peek(today());$("wCount").textContent=r.water||0;$("wGoalTxt").textContent=`of ${S.waterGoal} glasses`;
+  document.querySelectorAll(".meal").forEach(b=>b.setAttribute("aria-pressed",!!r.meals?.[b.dataset.m]))}
+
+/* ---------- Custom habit ---------- */
+let cur=null;
+function renderCustom(){const h=S.habits.find(x=>"habit-"+x.id===location.hash.slice(1));if(!h){location.hash="";return}cur=h;
+  $("cTitle").textContent=h.name;$("cStreak").textContent=streak(d=>isDone(h,d))+"d";
+  const ks=[];for(let i=27;i>=0;i--)ks.push(shift(today(),-i));
+  $("cCount").textContent=ks.filter(k=>isDone(h,k)).length;$("cToday").textContent=isDone(h,today())?"Done":"Not yet";
+  $("cDots").innerHTML=ks.map(k=>`<span class="dot${isDone(h,k)?" on":""}" title="${k}"></span>`).join("");
+  $("cDel").classList.remove("armed");$("cDel").textContent="Delete habit"}
+$("cDel").onclick=()=>{const b=$("cDel");if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Tap again to delete";return}
+  S.habits=S.habits.filter(x=>x!==cur);save();location.hash=""};
+
+/* ---------- Routing ---------- */
+const VIEWS={study:renderStudy,sleep:renderSleep,training:renderTraining,chores:renderChores,plan:renderPlan,water:renderWater};
+function render(){const h=location.hash.slice(1);const v=VIEWS[h]?h:h.startsWith("habit-")?"custom":"home";
+  document.querySelectorAll(".view").forEach(s=>s.hidden=s.id!=="v-"+v);
+  renderHome();if(VIEWS[v])VIEWS[v]();if(v==="custom")renderCustom()}
+let lastHash=null;
+addEventListener("hashchange",()=>{render();scrollTo(0,0)});
+let curDay=today();setInterval(()=>{if(today()!==curDay){curDay=today();render()}},60000);
+drawTimer();render();
+
+/* ---------- Sync ---------- */
+const SKEY="lockin-sync";let cfg={url:"https://phgcjqspxzwsomoamvkd.supabase.co",key:"sb_publishable_C-snZMAc5oSY0W10sEOQww_Culpbv7s"};try{const c=JSON.parse(localStorage.getItem(SKEY));if(c&&c.url&&c.key)cfg=c}catch(e){}
+let SB=null,user=null,syncing=false,again=false,qt=null;
+const smsg=t=>$("syncMsg").textContent=t;
+function merge(a,b){const o=Object.assign({},a);
+  if((b._t||0)>(a._t||0))TOP.forEach(f=>{if(b[f]!==undefined)o[f]=b[f]});
+  o._t=Math.max(a._t||0,b._t||0);o.days=Object.assign({},a.days);
+  for(const k in b.days||{})if(!o.days[k]||(b.days[k]._t||0)>(o.days[k]._t||0))o.days[k]=b.days[k];
+  o.v=2;return o}
+function queueSync(){if(!user)return;clearTimeout(qt);qt=setTimeout(sync,1500)}
+async function sync(){if(!SB||!user)return;if(syncing){again=true;return}
+  if(!navigator.onLine){smsg("Offline. Changes will sync when you reconnect.");return}
+  syncing=true;smsg("Syncing…");
+  try{const {data,error}=await SB.from("lockin_state").select("data").eq("user_id",user.id).maybeSingle();if(error)throw error;
+    if(data&&data.data){const before=JSON.stringify(S);S=merge(S,data.data);snapshot();localSave();
+      if(JSON.stringify(S)!==before){$("wGoal").value=S.waterGoal;render()}}
+    const {error:e2}=await SB.from("lockin_state").upsert({user_id:user.id,data:S,updated_at:new Date().toISOString()});if(e2)throw e2;
+    smsg("Synced at "+new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})+".")}
+  catch(err){smsg("Couldn't sync: "+(err.message||"check your connection")+".")}
+  syncing=false;if(again){again=false;sync()}}
+function renderSync(){const ready=!!SB;$("syncSetup").hidden=ready;$("syncAuth").hidden=!ready||!!user;$("syncOn").hidden=!user;
+  if(user)$("sbWho").textContent=user.email}
+async function connect(){SB=null;user=null;
+  if(!cfg.url||!cfg.key){renderSync();return}
+  if(!window.supabase){smsg("Sync needs an internet connection the first time you open the app.");renderSync();return}
+  try{SB=window.supabase.createClient(cfg.url,cfg.key,{auth:{persistSession:true,autoRefreshToken:true}})}catch(e){smsg("That project URL or key doesn't look right.");renderSync();return}
+  SB.auth.onAuthStateChange((ev,ses)=>{const was=user;user=ses?ses.user:null;renderSync();if(user&&!was)sync()});
+  const {data}=await SB.auth.getSession();user=data.session?data.session.user:null;renderSync();
+  if(user)sync();else smsg("Sign in, or create an account the first time.")}
+$("sbUrl").value=cfg.url||"";$("sbKey").value=cfg.key||"";
+$("syncSetup").onsubmit=e=>{e.preventDefault();cfg={url:$("sbUrl").value.trim().replace(/\/$/,""),key:$("sbKey").value.trim()};
+  try{localStorage.setItem(SKEY,JSON.stringify(cfg))}catch(x){}connect()};
+$("sbChange1").onclick=()=>{SB=null;renderSync();smsg("Enter your project URL and key.")};
+$("syncAuth").onsubmit=async e=>{e.preventDefault();smsg("Signing in…");
+  const {error}=await SB.auth.signInWithPassword({email:$("sbEmail").value.trim(),password:$("sbPass").value});
+  if(error)smsg("Couldn't sign in: "+error.message+".");else $("sbPass").value=""};
+$("sbSignup").onclick=async()=>{const email=$("sbEmail").value.trim(),password=$("sbPass").value;
+  if(!email||password.length<6){smsg("Enter your email and a password of at least 6 characters.");return}
+  smsg("Creating account…");const {data,error}=await SB.auth.signUp({email,password});
+  if(error)smsg("Couldn't create account: "+error.message+".");
+  else if(!data.session)smsg("Account created. Confirm the email Supabase sent you, then sign in.");
+  else{$("sbPass").value="";smsg("Account created.")}};
+$("sbNow").onclick=sync;
+$("sbOut").onclick=async()=>{await SB.auth.signOut();user=null;renderSync();smsg("Signed out. Data stays on this device.")};
+addEventListener("online",sync);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)sync()});
+setInterval(()=>{if(!document.hidden)sync()},60000);
+snapshot();connect();
+
+/* ---------- Backup ---------- */
+$("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="lock-in-backup-"+today()+".json";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  $("backupMsg").textContent="Backup downloaded. Keep it somewhere safe, e.g. your cloud drive."};
+$("importFile").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(d.v!==2||!d.days||!d.habits)throw 0;
+    S=Object.assign(S,d);save();render();$("backupMsg").textContent="Backup restored."}
+    catch(err){$("backupMsg").textContent="That file isn't a Lock In backup. Choose a file named lock-in-backup-….json."}
+    e.target.value=""};r.readAsText(f)};
+if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script>
+
+</body>
+</html>
