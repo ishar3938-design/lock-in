@@ -188,6 +188,10 @@ details.set summary{cursor:pointer;color:var(--muted);font-size:.85rem;margin-to
 .calc{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .calc .wide{grid-column:1/-1}
 .warn{color:#C2412D;font-size:.85rem;margin:6px 0 0}
+#v-training .seg{display:flex;flex-wrap:wrap;width:100%;box-sizing:border-box}
+#v-training .seg button{flex:1 1 auto;padding:8px 10px}
+#wkTable table{min-width:0}
+#wkTable td,#wkTable th{padding:6px 4px}
 @media (prefers-reduced-motion:reduce){.prog{transition:none}}
 </style>
 </head>
@@ -341,12 +345,12 @@ details.set summary{cursor:pointer;color:var(--muted);font-size:.85rem;margin-to
 <section class="view" id="v-training" hidden>
   <a class="back" href="#">← Today</a>
   <h1>Training</h1>
-  <div class="grid2">
+  <div class="seg" role="group" aria-label="Training section">
+    <button data-k="gym" aria-pressed="true">Gym</button><button data-k="cardio" aria-pressed="false">Running / cardio</button><button data-k="body" aria-pressed="false">Measurements</button>
+  </div>
+  <div class="grid2" id="trWork">
     <section class="panel">
       <h2>Log a session</h2>
-      <div class="seg" role="group" aria-label="Training type">
-        <button data-k="gym" aria-pressed="true">Gym</button><button data-k="cardio" aria-pressed="false">Running / cardio</button>
-      </div>
       <form id="gymForm" class="row">
         <label class="field" style="flex-basis:100%"><span class="label">Exercise</span><input type="text" id="gName" list="exList" placeholder="e.g. Bench press"></label>
         <label class="field"><span class="label">Sets</span><input type="number" id="gSets" min="1" value="3"></label>
@@ -375,6 +379,17 @@ details.set summary{cursor:pointer;color:var(--muted);font-size:.85rem;margin-to
       <div class="bars" id="trainBars"></div>
       <p class="hint">Bars show exercises and cardio sessions logged each day. On a rest day, tick Training on the home screen to keep your streak.</p>
     </section>
+  </div>
+  <div class="grid2" id="trBody" hidden>
+    <div class="col">
+    <section class="panel">
+      <h2>Weight</h2>
+      <form id="wtForm" class="row">
+        <label class="field"><span class="label">Today's weight (kg)</span><input type="number" id="wtKg" min="30" max="300" step="0.1" placeholder="72.0"></label>
+        <button class="btn" type="submit">Save</button>
+      </form>
+      <p class="hint" id="wtMsg">Weigh yourself at the same time each day, ideally first thing in the morning, for the most consistent trend.</p>
+    </section>
     <section class="panel">
       <h2>Daily calorie target</h2>
       <form id="calcForm" class="calc">
@@ -402,7 +417,14 @@ details.set summary{cursor:pointer;color:var(--muted);font-size:.85rem;margin-to
         <div class="num"><span class="label">Daily target</span><b id="pTarget">–</b></div>
       </div>
       <p class="warn" id="pWarn" hidden></p>
-      <p class="hint">An estimate from the Mifflin–St Jeor equation. Weigh yourself weekly and adjust by 100–200 kcal if your weight isn't moving as planned. Your target shows on the Water &amp; meals page.</p>
+      <p class="hint">An estimate from the Mifflin–St Jeor equation. Weigh yourself weekly and adjust by 100–200 kcal if your weight isn't moving as planned. Your target shows on the Water &amp; meals page. Saving a new weight above updates it automatically.</p>
+    </section>
+    </div>
+    <section class="panel">
+      <h2>Weekly history</h2>
+      <div id="wkChart"></div>
+      <div class="week" id="wkTable" style="margin-top:12px"></div>
+      <p class="hint">Weeks run Monday to Sunday. Weight is the average of the days you weighed in; calories are the daily average over the days you logged food.</p>
     </section>
   </div>
 </section>
@@ -710,7 +732,42 @@ function renderSleep(){const keys=last7(),v=keys.map(k=>peek(k).sleep?.h||0),r=p
 let tk="gym";
 document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{tk=b.dataset.k;
   document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===b));
-  $("gymForm").hidden=tk!=="gym";$("cardioForm").hidden=tk!=="cardio";$("lastTime").hidden=tk!=="gym"});
+  $("gymForm").hidden=tk!=="gym";$("cardioForm").hidden=tk!=="cardio";$("lastTime").hidden=tk!=="gym";
+  $("trWork").hidden=tk==="body";$("trBody").hidden=tk!=="body";if(tk==="body")renderBody()});
+/* measurements: weight log + weekly history */
+const r1=n=>Math.round(n*10)/10;
+function monday(k){const [y,m,d]=k.split("-").map(Number),t=new Date(y,m-1,d);t.setDate(t.getDate()-((t.getDay()+6)%7));return dayKey(t)}
+function weeks(n){const out=[];let mk=monday(today());for(let i=0;i<n;i++){const days=[];for(let j=0;j<7;j++)days.push(shift(mk,j));
+  const ws=days.map(k=>peek(k).weight).filter(v=>v>0),ks=days.filter(k=>(peek(k).food||[]).length).map(k=>eaten(peek(k)));
+  out.unshift({mk,w:ws.length?ws.reduce((a,b)=>a+b,0)/ws.length:null,nw:ws.length,k:ks.length?ks.reduce((a,b)=>a+b,0)/ks.length:null,nk:ks.length});mk=shift(mk,-7)}return out}
+const wkLabel=k=>{const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString(undefined,{day:"numeric",month:"short"})};
+function renderBody(){const tw=peek(today()).weight;if(tw&&document.activeElement!==$("wtKg"))$("wtKg").value=tw;
+  const W=weeks(8),hasW=W.some(x=>x.w),hasK=W.some(x=>x.k);
+  if(!hasW&&!hasK){$("wkChart").innerHTML="";$("wkTable").innerHTML='<p class="empty">Save your weight above, and log food on the Water &amp; meals page, to see your weekly history here.</p>';return}
+  const X=i=>36+i*(276/7),t=kcalTarget();let s='<svg viewBox="0 0 320 230" width="100%" role="img" aria-label="Average weight and calories per week for the last 8 weeks" style="max-width:100%;display:block;font-family:var(--body);font-size:10px">';
+  s+='<text x="0" y="12" style="fill:var(--muted);font-weight:600">Average weight (kg)</text>';
+  const wv=W.filter(x=>x.w).map(x=>x.w);
+  if(wv.length){let lo=Math.min(...wv),hi=Math.max(...wv);if(hi-lo<1){const c=(hi+lo)/2;lo=c-.5;hi=c+.5}const Y=v=>98-(v-lo)/(hi-lo)*72;
+    s+=`<line x1="36" y1="26" x2="314" y2="26" style="stroke:var(--line)"/><line x1="36" y1="98" x2="314" y2="98" style="stroke:var(--line)"/>`;
+    s+=`<text x="30" y="29" text-anchor="end" style="fill:var(--muted)">${r1(hi)}</text><text x="30" y="101" text-anchor="end" style="fill:var(--muted)">${r1(lo)}</text>`;
+    const pts=W.map((x,i)=>x.w?[X(i),Y(x.w)]:null).filter(Boolean);
+    if(pts.length>1)s+=`<polyline points="${pts.map(p=>p.join(",")).join(" ")}" style="fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round"/>`;
+    pts.forEach(p=>s+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" style="fill:var(--accent)"/>`)}
+  else s+='<text x="36" y="64" style="fill:var(--muted)">No weigh-ins yet</text>';
+  s+='<text x="0" y="128" style="fill:var(--muted);font-weight:600">Calories per day</text>';
+  const kv=W.filter(x=>x.k).map(x=>x.k),km=Math.max(t||0,...kv,1)*1.1,BY=v=>205-v/km*65;
+  s+='<line x1="36" y1="205" x2="314" y2="205" style="stroke:var(--line)"/>';
+  W.forEach((x,i)=>{if(x.k)s+=`<rect x="${X(i)-9}" y="${BY(x.k)}" width="18" height="${205-BY(x.k)}" rx="3" style="fill:${i===7?"var(--accent)":"var(--accent-soft)"}"/>`});
+  if(t)s+=`<line x1="36" y1="${BY(t)}" x2="314" y2="${BY(t)}" style="stroke:var(--rest);stroke-width:1.5;stroke-dasharray:4 3"/><text x="314" y="${BY(t)-4}" text-anchor="end" style="fill:var(--rest);font-weight:600">Target ${t.toLocaleString()}</text>`;
+  if(!kv.length)s+='<text x="36" y="185" style="fill:var(--muted)">No food logged yet</text>';
+  W.forEach((x,i)=>{if(i%2===1||i===7)s+=`<text x="${X(i)}" y="222" text-anchor="${i===7?"end":"middle"}" style="fill:var(--muted)">${i===7?"This wk":wkLabel(x.mk)}</text>`});
+  $("wkChart").innerHTML=s+"</svg>";
+  const rows=W.slice().reverse().filter(x=>x.w||x.k);
+  $("wkTable").innerHTML=`<table><tr><th>Week of</th><th>Weight</th><th>Change</th><th>kcal/day</th></tr>${rows.map(x=>{const prev=W[W.indexOf(x)-1],ch=x.w&&prev&&prev.w?r1(x.w-prev.w):null;
+    return `<tr><td>${wkLabel(x.mk)}</td><td>${x.w?r1(x.w)+" kg":"–"}</td><td>${ch===null?"–":(ch>0?"+":"")+ch+" kg"}</td><td>${x.k?Math.round(x.k).toLocaleString()+(x.nk<7?` <span style="color:var(--muted)">(${x.nk}d)</span>`:""):"–"}</td></tr>`}).join("")}</table>`}
+$("wtForm").onsubmit=e=>{e.preventDefault();const v=parseFloat($("wtKg").value);if(!(v>=30&&v<=300)){$("wtKg").focus();return}
+  day(today()).weight=r1(v);if(S.profile)S.profile.kg=r1(v);$("pKg").value=r1(v);save();render();
+  $("wtMsg").textContent=`Saved ${r1(v)} kg for today.`+(S.profile?" Your calorie target has been updated.":" Fill in the calorie target below to get a daily goal.")};
 function lastFor(name){const n=name.trim().toLowerCase();if(!n)return null;
   const ks=Object.keys(S.days).sort().reverse();for(const k of ks){if(k===today())continue;
     const e=(S.days[k].train||[]).filter(x=>x.kind==="gym"&&x.name.toLowerCase()===n).pop();if(e)return{k,e}}return null}
@@ -723,7 +780,7 @@ $("cardioForm").onsubmit=e=>{e.preventDefault();const km=parseFloat($("cKm").val
   day(today()).train.push({id:uid(),kind:"cardio",name:$("cType").value,km,min});$("cKm").value=$("cMin").value="";save();render()};
 $("trainToday").onclick=e=>{if(!e.target.matches(".del"))return;const id=e.target.closest("li").dataset.id;
   const r=day(today());r.train=r.train.filter(x=>x.id!==id);save();render()};
-function renderTraining(){renderCalc();const list=peek(today()).train||[];
+function renderTraining(){renderCalc();if(tk==="body")renderBody();const list=peek(today()).train||[];
   $("trainToday").innerHTML=list.length?list.map(x=>{const d=x.kind==="gym"?`${esc(x.name)} — ${x.sets} × ${x.reps}${x.kg?" @ "+x.kg+" kg":""}`
       :`${esc(x.name)} — ${x.km?x.km+" km":""}${x.km&&x.min?" in ":""}${x.min?x.min+" min":""}${x.km&&x.min?` (${(x.min/x.km).toFixed(1)} min/km)`:""}`;
     return `<li data-id="${x.id}"><span class="t">${d}</span><em class="tag">${x.kind==="gym"?"Gym":"Cardio"}</em><button class="del" aria-label="Delete">×</button></li>`}).join("")
@@ -886,7 +943,7 @@ function renderDay(){const p=$("hDay");
   if(!hSel){p.innerHTML='<p class="empty" style="margin:0;padding:0">Tap any day below to see what you completed.</p>';return}
   const r=peek(hSel),[y,m,d]=hSel.split("-").map(Number),dt=new Date(y,m-1,d),extra=[];
   if(r.study&&r.study.min)extra.push(r.study.min+" min studied");if(r.sleep)extra.push(r.sleep.h.toFixed(1)+" h sleep");
-  if((r.train||[]).length)extra.push(r.train.length+" training entries");if(r.bottles)extra.push(fmtB(r.bottles)+" bottles of water");if((r.food||[]).length)extra.push(Math.round(eaten(r))+" kcal eaten");
+  if((r.train||[]).length)extra.push(r.train.length+" training entries");if(r.weight)extra.push(r.weight+" kg");if(r.bottles)extra.push(fmtB(r.bottles)+" bottles of water");if((r.food||[]).length)extra.push(Math.round(eaten(r))+" kcal eaten");
   p.innerHTML=`<h2>${dt.toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</h2><ul class="list">${S.habits.map(h=>{const ok=isDone(h,hSel);return `<li class="${ok?"":"miss"}"><span class="tick">${ok?"✓":"–"}</span><span class="t">${esc(h.name)}</span></li>`}).join("")}</ul>${extra.length?`<p class="hint">${extra.join(" · ")}</p>`:""}`}
 $("hMonths").onclick=e=>{const b=e.target.closest("button[data-k]");if(!b)return;hSel=b.dataset.k;renderHistory()};
 $("hHabit").onchange=renderHistory;
