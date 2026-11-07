@@ -809,7 +809,10 @@ function showRecent(){const rf=S.recentFoods||[];if(rf.length)listFoods(rf.slice
 $("foodForm").onsubmit=async e=>{e.preventDefault();const q=$("fQuery").value.trim();if(!q){showRecent();return}
   $("fPick").hidden=true;$("fMsg").textContent="Searching…";$("fRes").innerHTML="";
   const [a,b]=await Promise.allSettled([searchFdc(q),searchOff(q)]);
-  const res=[...(a.status==="fulfilled"?a.value:[]),...(b.status==="fulfilled"?b.value:[])];
+  const all=[...(a.status==="fulfilled"?a.value:[]),...(b.status==="fulfilled"?b.value:[])];
+  const words=q.toLowerCase().split(/\s+/).filter(w=>w.length>1),score=f=>{const n=f.name.toLowerCase();return words.filter(w=>n.includes(w)).length};
+  const sc=all.map((f,i)=>({f,i,s:score(f)})),best=Math.max(0,...sc.map(x=>x.s));
+  const res=sc.filter(x=>x.s>0||best===0).sort((x,y)=>y.s-x.s||x.i-y.i).map(x=>x.f);
   let msg=res.length?`${res.length} matches. Tap one to add it.`:"No matches. Try a simpler name (e.g. \u201cfried rice\u201d), or add the calories yourself below.";
   if(a.status==="rejected"&&a.reason.message==="limit")msg+=" The USDA demo key has hit its hourly limit; add your own free key under Food database settings.";
   else if(a.status==="rejected"&&b.status==="rejected")msg=navigator.onLine?"The food databases didn't respond. Try again in a moment.":"You're offline. Food search needs internet; you can still add calories yourself below.";
