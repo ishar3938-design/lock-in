@@ -191,6 +191,7 @@ details.set summary{cursor:pointer;color:var(--muted);font-size:.85rem;margin-to
 #v-training .seg{display:flex;flex-wrap:wrap;width:100%;box-sizing:border-box}
 #v-training .seg button{flex:1 1 auto;padding:8px 10px}
 #wkTable table{min-width:0}
+#trWork .nums{grid-template-columns:repeat(2,minmax(0,1fr))}
 #wkTable td,#wkTable th{padding:6px 4px}
 @media (prefers-reduced-motion:reduce){.prog{transition:none}}
 </style>
@@ -733,7 +734,8 @@ let tk="gym";
 document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{tk=b.dataset.k;
   document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===b));
   $("gymForm").hidden=tk!=="gym";$("cardioForm").hidden=tk!=="cardio";$("lastTime").hidden=tk!=="gym";
-  $("trWork").hidden=tk==="body";$("trBody").hidden=tk!=="body";if(tk==="body")renderBody()});
+  $("trWork").hidden=tk==="body";$("trBody").hidden=tk!=="body";if(tk==="body")renderBody();statVis()});
+function statVis(){$("trDays").parentElement.hidden=tk==="cardio";$("trKm").parentElement.hidden=tk==="gym"}
 /* measurements: weight log + weekly history */
 const r1=n=>Math.round(n*10)/10;
 function monday(k){const [y,m,d]=k.split("-").map(Number),t=new Date(y,m-1,d);t.setDate(t.getDate()-((t.getDay()+6)%7));return dayKey(t)}
@@ -780,7 +782,7 @@ $("cardioForm").onsubmit=e=>{e.preventDefault();const km=parseFloat($("cKm").val
   day(today()).train.push({id:uid(),kind:"cardio",name:$("cType").value,km,min});$("cKm").value=$("cMin").value="";save();render()};
 $("trainToday").onclick=e=>{if(!e.target.matches(".del"))return;const id=e.target.closest("li").dataset.id;
   const r=day(today());r.train=r.train.filter(x=>x.id!==id);save();render()};
-function renderTraining(){renderCalc();if(tk==="body")renderBody();const list=peek(today()).train||[];
+function renderTraining(){renderCalc();if(tk==="body")renderBody();statVis();const list=peek(today()).train||[];
   $("trainToday").innerHTML=list.length?list.map(x=>{const d=x.kind==="gym"?`${esc(x.name)} — ${x.sets} × ${x.reps}${x.kg?" @ "+x.kg+" kg":""}`
       :`${esc(x.name)} — ${x.km?x.km+" km":""}${x.km&&x.min?" in ":""}${x.min?x.min+" min":""}${x.km&&x.min?` (${(x.min/x.km).toFixed(1)} min/km)`:""}`;
     return `<li data-id="${x.id}"><span class="t">${d}</span><em class="tag">${x.kind==="gym"?"Gym":"Cardio"}</em><button class="del" aria-label="Delete">×</button></li>`}).join("")
