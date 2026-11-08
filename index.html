@@ -1161,6 +1161,12 @@ let lastHash=null;
 addEventListener("hashchange",()=>{render();scrollTo(0,0)});
 let curDay=today();setInterval(()=>{if(today()!==curDay){curDay=today();render()}},60000);
 fillSettings();drawTimer();render();
+/* fill in protein for Indian dishes logged before protein tracking existed */
+async function backfillProtein(){const d=await loadIndb();if(!d.length)return;const P=new Map(d.map(e=>[e.n,e.p||0]));let ch=false;
+  const fix=f=>{if(f&&f.src==="INDB"&&P.has(f.name)){if(f.p===undefined&&f.grams>0){f.p=P.get(f.name)*f.grams/100;ch=true}if(f.kcal100&&f.p100===undefined){f.p100=P.get(f.name);ch=true}}};
+  for(const k in S.days)(S.days[k].food||[]).forEach(fix);(S.recentFoods||[]).forEach(fix);(S.savedMeals||[]).forEach(m=>(m.items||[]).forEach(fix));
+  if(ch){save();render()}}
+backfillProtein();
 
 /* ---------- Sync ---------- */
 const SKEY="lockin-sync";let cfg={url:"https://phgcjqspxzwsomoamvkd.supabase.co",key:"sb_publishable_C-snZMAc5oSY0W10sEOQww_Culpbv7s"};try{const c=JSON.parse(localStorage.getItem(SKEY));if(c&&c.url&&c.key)cfg=c}catch(e){}
